@@ -2,6 +2,7 @@ package com.ui_utils;
 
 import com.google.common.collect.ImmutableList;
 import it.unimi.dsi.fastutil.ints.Int2ObjectArrayMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -15,7 +16,9 @@ import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.c2s.play.BookUpdateC2SPacket;
 import net.minecraft.network.packet.c2s.play.ButtonClickC2SPacket;
 import net.minecraft.network.packet.c2s.play.ClickSlotC2SPacket;
 import net.minecraft.network.packet.c2s.play.CloseHandledScreenC2SPacket;
@@ -29,10 +32,9 @@ import com.ui_utils.mixin.accessor.ClientConnectionAccessor;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Objects;
+import java.util.*;
+import java.util.List;
 import java.util.Timer;
-import java.util.TimerTask;
-import java.util.Vector;
 
 public class MainClient implements ClientModInitializer {
     public static Font monospace;
@@ -141,6 +143,17 @@ public class MainClient implements ClientModInitializer {
             }
             SharedVariables.delayedUIPackets.clear();
         }).width(160).position(5, 155).build());
+
+        // register book dupe buttons in all HandledScreens
+        screen.addDrawableChild(ButtonWidget.builder(Text.of("B-Dupe Hotbar"), (button) -> {
+            dupe(36, 44);
+        }).width(130).position(345, 190).build());
+        screen.addDrawableChild(ButtonWidget.builder(Text.of("B-Dupe Inventory"), (button) -> {
+            dupe(9, 35);
+        }).width(130).position(345, 210).build());
+        screen.addDrawableChild(ButtonWidget.builder(Text.of("B-Dupe Both"), (button) -> {
+            dupe(9, 44);
+        }).width(130).position(345, 230).build());
 
         // register "fabricate packet" button in all HandledScreens
         ButtonWidget fabricatePacketButton = ButtonWidget.builder(Text.of("Fabricate packet"), (button) -> {
@@ -528,5 +541,27 @@ public class MainClient implements ClientModInitializer {
         ModMetadata modMetadata = FabricLoader.getInstance().getModContainer(modId).isPresent() ? FabricLoader.getInstance().getModContainer(modId).get().getMetadata() : null;
 
         return modMetadata != null ? modMetadata.getVersion().getFriendlyString() : "null";
+    }
+
+    private static void dupe(int start_slot, int end_slot) {
+        if(!(mc.player.getInventory().getMainHandStack().getItem()  == Items.WRITABLE_BOOK)) {
+            mc.player.sendMessage(Text.of("Please hold a writable book!"));
+            return;
+        }
+        for(int i = start_slot; i <= end_slot; i++) {
+            if(36 + mc.player.getInventory().selectedSlot == i) continue;
+            mc.player.networkHandler.sendPacket(new ClickSlotC2SPacket(
+                    mc.player.currentScreenHandler.syncId,
+                    mc.player.currentScreenHandler.getRevision(),
+                    i,
+                    1,
+                    SlotActionType.THROW,
+                    ItemStack.EMPTY,
+                    Int2ObjectMaps.emptyMap()
+            ));
+        }
+        mc.player.networkHandler.sendPacket(new BookUpdateC2SPacket(
+                mc.player.getInventory().selectedSlot, List.of("arch"), Optional.of("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        )));
     }
 }
